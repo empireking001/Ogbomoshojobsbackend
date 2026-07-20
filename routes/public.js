@@ -9,6 +9,35 @@ const router = express.Router();
 
 const writeLimiter = rateLimit({ windowMs: 10 * 60 * 1000, max: 8 });
 
+const lookupLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many attempts, please try again shortly." },
+});
+
+// GET /api/waitlist/lookup?email=... — returning users retrieve their own stats.
+// Deliberately returns only referral/points data, never phone or internal fraud fields.
+router.get("/waitlist/lookup", lookupLimiter, async (req, res, next) => {
+  try {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: "Email is required" });
+
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
+    if (!user) {
+      return res.status(404).json({ error: "No waitlist signup found for that email" });
+    }
+
+    res.json({
+      fullName: user.fullName,
+      referralCode: user.referralCode,
+      points: user.points,
+      referralCount: user.referralCount,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /api/count — total members + today's signups, for the live counter
 router.get("/count", async (_req, res, next) => {
   try {
