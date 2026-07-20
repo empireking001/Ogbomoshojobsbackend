@@ -47,7 +47,12 @@ router.get("/count", async (_req, res, next) => {
     const today = await User.countDocuments({ createdAt: { $gte: startOfDay } });
     const settings = await Settings.findOne({ key: "site" });
 
-    res.json({ total, today, goal: settings?.waitlistGoal || 2000 });
+    res.json({
+      total,
+      today,
+      goal: settings?.waitlistGoal || 2000,
+      showPublicCount: settings?.showPublicCount !== false,
+    });
   } catch (err) {
     next(err);
   }

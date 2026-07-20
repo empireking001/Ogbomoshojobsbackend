@@ -13,6 +13,7 @@ const settingsSchema = new mongoose.Schema(
     heroPrimaryCta: { type: String, default: "Become a Founding Member" },
     heroSecondaryCta: { type: String, default: "Join as Employer" },
     waitlistGoal: { type: Number, default: 2000 },
+    showPublicCount: { type: Boolean, default: true },
     faq: [
       {
         question: String,
