@@ -14,7 +14,7 @@ const DEFAULT_TASKS = [
   { title: "Follow X", points: 20, order: 2 },
   { title: "Follow Instagram", points: 20, order: 3 },
   { title: "Join WhatsApp Channel", points: 30, order: 4 },
-  { title: "Invite a Friend", points: 100, order: 5 },
+  { title: "Invite a Friend", points: 100, order: 5, isReferralTask: true },
   { title: "Complete Profile", points: 20, order: 6 },
 ];
 
