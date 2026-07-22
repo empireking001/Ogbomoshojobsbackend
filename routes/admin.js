@@ -345,4 +345,17 @@ router.get("/employers", async (_req, res, next) => {
   }
 });
 
+router.get("/employers/export", async (_req, res, next) => {
+  try {
+    const employers = await Employer.find().sort({ createdAt: -1 }).lean();
+    const fields = ["businessName", "industry", "contactPerson", "email", "phone", "hiringNeeds", "createdAt"];
+    const csv = new CsvParser({ fields }).parse(employers);
+    res.header("Content-Type", "text/csv");
+    res.attachment("ogbojobs-employers.csv");
+    res.send(csv);
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;
