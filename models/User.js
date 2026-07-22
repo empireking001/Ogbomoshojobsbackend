@@ -17,7 +17,12 @@ const userSchema = new mongoose.Schema(
     referralCount: { type: Number, default: 0 },
     points: { type: Number, default: 100 },
 
-    completedTasks: [{ type: mongoose.Schema.Types.ObjectId, ref: "Task" }],
+    completedTasks: [
+      {
+        task: { type: mongoose.Schema.Types.ObjectId, ref: "Task" },
+        completedAt: { type: Date, default: Date.now },
+      },
+    ],
     profileCompleted: { type: Boolean, default: false },
 
     referralStatus: {

@@ -32,6 +32,45 @@ router.get("/waitlist/lookup", lookupLimiter, async (req, res, next) => {
       referralCode: user.referralCode,
       points: user.points,
       referralCount: user.referralCount,
+      completedTaskIds: user.completedTasks.map((ct) => String(ct.task)),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+const completeTaskLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  message: { error: "Too many attempts, please try again shortly." },
+});
+
+// POST /api/waitlist/complete-task { email, taskId } — mark a task done and award its points.
+// Idempotent: completing the same task twice never double-awards points.
+router.post("/waitlist/complete-task", completeTaskLimiter, async (req, res, next) => {
+  try {
+    const { email, taskId } = req.body;
+    if (!email || !taskId) return res.status(400).json({ error: "Email and taskId are required" });
+
+    const [user, task] = await Promise.all([
+      User.findOne({ email: String(email).toLowerCase().trim() }),
+      Task.findOne({ _id: taskId, active: true }),
+    ]);
+
+    if (!user) return res.status(404).json({ error: "No waitlist signup found for that email" });
+    if (!task) return res.status(404).json({ error: "Task not found or no longer active" });
+
+    const alreadyDone = user.completedTasks.some((ct) => String(ct.task) === String(taskId));
+    if (!alreadyDone) {
+      user.completedTasks.push({ task: task._id, completedAt: new Date() });
+      user.points += task.points;
+      await user.save();
+    }
+
+    res.json({
+      points: user.points,
+      referralCount: user.referralCount,
+      completedTaskIds: user.completedTasks.map((ct) => String(ct.task)),
     });
   } catch (err) {
     next(err);
@@ -58,21 +97,57 @@ router.get("/count", async (_req, res, next) => {
   }
 });
 
-// GET /api/recent — latest signups for the "just joined" ticker (privacy-safe)
+// GET /api/recent — latest activity (signups + task completions) for the ticker.
+// Everything here is real activity that actually happened — nothing fabricated.
 router.get("/recent", async (_req, res, next) => {
   try {
-    const recent = await User.find({ role: { $ne: "Employer" } })
+    const recentSignups = await User.find({ role: { $ne: "Employer" } })
       .sort({ createdAt: -1 })
-      .limit(8)
+      .limit(6)
       .select("fullName role createdAt");
 
-    res.json(
-      recent.map((u) => ({
-        firstName: u.fullName.trim().split(/\s+/)[0],
-        role: u.role,
-        createdAt: u.createdAt,
-      }))
-    );
+    const recentCompletions = await User.aggregate([
+      { $unwind: "$completedTasks" },
+      { $sort: { "completedTasks.completedAt": -1 } },
+      { $limit: 6 },
+      {
+        $lookup: {
+          from: "tasks",
+          localField: "completedTasks.task",
+          foreignField: "_id",
+          as: "taskInfo",
+        },
+      },
+      { $unwind: "$taskInfo" },
+      {
+        $project: {
+          _id: 0,
+          fullName: 1,
+          taskTitle: "$taskInfo.title",
+          completedAt: "$completedTasks.completedAt",
+        },
+      },
+    ]);
+
+    const signupEvents = recentSignups.map((u) => ({
+      type: "signup",
+      firstName: u.fullName.trim().split(/\s+/)[0],
+      role: u.role,
+      at: u.createdAt,
+    }));
+
+    const taskEvents = recentCompletions.map((c) => ({
+      type: "task",
+      firstName: c.fullName.trim().split(/\s+/)[0],
+      taskTitle: c.taskTitle,
+      at: c.completedAt,
+    }));
+
+    const merged = [...signupEvents, ...taskEvents]
+      .sort((a, b) => new Date(b.at) - new Date(a.at))
+      .slice(0, 8);
+
+    res.json(merged);
   } catch (err) {
     next(err);
   }
